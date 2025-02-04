@@ -1,4 +1,4 @@
-"use server";
+'use server';
 
 import { revalidatePath } from "next/cache";
 import { ID, Query } from "node-appwrite";
@@ -13,10 +13,21 @@ import {
 } from "../appwrite.config";
 import { formatDateTime, parseStringify } from "../utils";
 
-//  CREATE APPOINTMENT
-export const createAppointment = async (
-  appointment: CreateAppointmentParams
-) => {
+export type UpdateAppointmentParams = {
+  userId: string;
+  appointmentId: string;
+  appointment: {
+    primaryPhysician: string;
+    schedule?: Date;
+    status: Status;
+    timeZone: string;
+    cancellationReason?: string;
+  };
+  type: 'schedule' | 'create' | 'cancel';
+};
+
+// CREATE APPOINTMENT
+export const createAppointment = async (appointment: CreateAppointmentParams) => {
   try {
     const newAppointment = await databases.createDocument(
       DATABASE_ID!,
@@ -32,7 +43,7 @@ export const createAppointment = async (
   }
 };
 
-//  GET RECENT APPOINTMENTS
+// GET RECENT APPOINTMENTS
 export const getRecentAppointmentList = async () => {
   try {
     const appointments = await databases.listDocuments(
@@ -40,26 +51,6 @@ export const getRecentAppointmentList = async () => {
       APPOINTMENT_COLLECTION_ID!,
       [Query.orderDesc("$createdAt")]
     );
-
-    // const scheduledAppointments = (
-    //   appointments.documents as Appointment[]
-    // ).filter((appointment) => appointment.status === "scheduled");
-
-    // const pendingAppointments = (
-    //   appointments.documents as Appointment[]
-    // ).filter((appointment) => appointment.status === "pending");
-
-    // const cancelledAppointments = (
-    //   appointments.documents as Appointment[]
-    // ).filter((appointment) => appointment.status === "cancelled");
-
-    // const data = {
-    //   totalCount: appointments.total,
-    //   scheduledCount: scheduledAppointments.length,
-    //   pendingCount: pendingAppointments.length,
-    //   cancelledCount: cancelledAppointments.length,
-    //   documents: appointments.documents,
-    // };
 
     const initialCounts = {
       scheduledCount: 0,
@@ -100,10 +91,9 @@ export const getRecentAppointmentList = async () => {
   }
 };
 
-//  SEND SMS NOTIFICATION
+// SEND SMS NOTIFICATION
 export const sendSMSNotification = async (userId: string, content: string) => {
   try {
-    // https://appwrite.io/docs/references/1.5.x/server-nodejs/messaging#createSms
     const message = await messaging.createSms(
       ID.unique(),
       content,
@@ -116,16 +106,14 @@ export const sendSMSNotification = async (userId: string, content: string) => {
   }
 };
 
-//  UPDATE APPOINTMENT
+// UPDATE APPOINTMENT
 export const updateAppointment = async ({
   appointmentId,
   userId,
-  timeZone,
   appointment,
   type,
 }: UpdateAppointmentParams) => {
   try {
-    // Update appointment to scheduled -> https://appwrite.io/docs/references/cloud/server-nodejs/databases#updateDocument
     const updatedAppointment = await databases.updateDocument(
       DATABASE_ID!,
       APPOINTMENT_COLLECTION_ID!,
@@ -133,9 +121,9 @@ export const updateAppointment = async ({
       appointment
     );
 
-    if (!updatedAppointment) throw Error;
+    if (!updatedAppointment) throw new Error("Failed to update appointment");
 
-    const smsMessage = `Greetings from CarePulse. ${type === "schedule" ? `Your appointment is confirmed for ${formatDateTime(appointment.schedule!, timeZone).dateTime} with Dr. ${appointment.primaryPhysician}` : `We regret to inform that your appointment for ${formatDateTime(appointment.schedule!, timeZone).dateTime} is cancelled. Reason:  ${appointment.cancellationReason}`}.`;
+    const smsMessage = `Greetings from CarePulse. ${type === "schedule" ? `Your appointment is confirmed for ${formatDateTime(appointment.schedule!, appointment.timeZone!).dateTime} with Dr. ${appointment.primaryPhysician}` : `We regret to inform that your appointment for ${formatDateTime(appointment.schedule!, appointment.timeZone!).dateTime} is cancelled. Reason:  ${appointment.cancellationReason}`}.`;
     await sendSMSNotification(userId, smsMessage);
 
     revalidatePath("/admin");

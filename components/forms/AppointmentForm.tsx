@@ -98,6 +98,7 @@ export const AppointmentForm = ({
             primaryPhysician: values.primaryPhysician,
             schedule: new Date(values.schedule),
             status: status as Status,
+            timeZone: "America/New_York",
             cancellationReason: values.cancellationReason,
           },
           type,
